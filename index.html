@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="سیستم مدیریت کارکنان v3.0 - سیستم یکپارچه حضور و غیاب و مدیریت پرسنل">
+    <meta name="theme-color" content="#3b82f6">
+    <title>سیستم مدیریت کارکنان | v3.0</title>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Persian Font -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Persian Datepicker CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css">
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => console.log('Service Worker registered:', registration))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- صفحه بارگذاری -->
+    <div id="app-loading">
+        <div class="spinner"></div>
+        <h2>در حال راه‌اندازی سیستم...</h2>
+        <p id="loading-step">در حال بارگذاری ماژول‌ها</p>
+    </div>
+
+    <!-- صفحه احراز هویت -->
+    <div id="auth-page" class="hidden">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1>سیستم مدیریت کارکنان</h1>
+                <p>نسخه ۳.۰ - سیستم یکپارچه حضور و غیاب</p>
+            </div>
+            
+            <div class="auth-tabs">
+                <div class="auth-tab active" data-auth-type="employee">ورود کارمند</div>
+                <div class="auth-tab" data-auth-type="admin">ورود مدیر</div>
+            </div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="user-code">کد پرسنلی</label>
+                    <input type="text" id="user-code" class="form-control" placeholder="کد پرسنلی خود را وارد کنید" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">رمز عبور</label>
+                    <input type="password" id="password" class="form-control" placeholder="رمز عبور خود را وارد کنید" required>
+                </div>
+                
+                <!-- CAPTCHA Container -->
+                <div id="captcha-container" class="form-group" style="display: none;">
+                    <label for="captcha-input">کد امنیتی</label>
+                    <div id="captcha-display" style="margin-bottom: 10px;"></div>
+                    <input type="text" id="captcha-input" class="form-control" placeholder="کد نمایش داده شده را وارد کنید">
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i>
+                    ورود به سیستم
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- پورتال اصلی -->
+    <div id="main-portal" class="portal hidden">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-avatar">ک</div>
+                    <div class="user-details">
+                        <h3 id="user-name">نام کاربر</h3>
+                        <span id="user-role">سطح دسترسی</span>
+                    </div>
+                </div>
+                <div class="connection-status" id="connection-status">
+                    <i class="fas fa-circle"></i>
+                    <span id="connection-status-text">آنلاین</span>
+                </div>
+            </div>
+
+            <!-- منوی کارمند -->
+            <ul class="sidebar-menu" id="employee-menu">
+                <li><a href="#" data-tab="employee-dashboard" class="active"><i class="fas fa-chart-bar"></i> داشبورد</a></li>
+                <li><a href="#" data-tab="employee-attendance"><i class="fas fa-fingerprint"></i> حضور و غیاب</a></li>
+                <li><a href="#" data-tab="employee-tasks"><i class="fas fa-tasks"></i> کارهای من</a></li>
+                <li><a href="#" data-tab="employee-requests"><i class="fas fa-envelope"></i> درخواست‌های من</a></li>
+                <li><a href="#" data-tab="employee-duty"><i class="fas fa-calendar-alt"></i> کشیک‌های من</a></li>
+                <li><a href="#" id="sidebar-logout-btn"><i class="fas fa-sign-out-alt"></i> خروج</a></li>
+            </ul>
+
+            <!-- منوی مدیر -->
+            <ul class="sidebar-menu" id="admin-menu" style="display: none;">
+                <li><a href="#" data-tab="admin-dashboard" class="active"><i class="fas fa-chart-bar"></i> داشبورد</a></li>
+                <li><a href="#" data-tab="admin-employees"><i class="fas fa-users"></i> مدیریت کارکنان</a></li>
+                <li><a href="#" data-tab="admin-tasks"><i class="fas fa-tasks"></i> مدیریت کارها</a></li>
+                <li><a href="#" data-tab="admin-requests"><i class="fas fa-envelope-open"></i> مدیریت درخواست‌ها</a></li>
+                <li><a href="#" data-tab="admin-duty"><i class="fas fa-calendar-alt"></i> مدیریت کشیک</a></li>
+                <li><a href="#" data-tab="admin-reports"><i class="fas fa-chart-pie"></i> گزارش‌گیری</a></li>
+                <li><a href="#" data-tab="admin-settings"><i class="fas fa-cogs"></i> تنظیمات سیستم</a></li>
+                <li><a href="#" id="admin-sidebar-logout-btn"><i class="fas fa-sign-out-alt"></i> خروج</a></li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <p>نسخه ۳.۰.۰</p>
+                <p id="current-time-display">--:--:--</p>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content">
+            <!-- Header -->
+            <div class="header">
+                <div class="page-title">
+                    <h1 id="page-title">داشبورد</h1>
+                    <p>سیستم مدیریت یکپارچه کارکنان</p>
+                </div>
+                <div class="header-actions">
+                    <div class="time-display" id="current-time">
+                        <i class="fas fa-clock"></i>
+                        <span>--:--:--</span>
+                    </div>
+                    <div class="date-display" id="current-date">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>----/--/--</span>
+                    </div>
+                    <button class="btn btn-glass" id="header-logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        خروج
+                    </button>
+                </div>
+            </div>
+
+            <!-- تب‌های محتوا -->
+            <div class="tab-content-container">
+                <!-- داشبورد کارمند -->
+                <div id="employee-dashboard" class="tab-content active">
+                    <!-- GPS Status -->
+                    <div class="gps-status" id="gps-status">
+                        <div class="gps-status-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="gps-status-content">
+                            <h3>وضعیت موقعیت‌یابی</h3>
+                            <p id="gps-status-text">در حال بررسی موقعیت...</p>
+                        </div>
+                    </div>
+
+                    <!-- آمارها -->
+                    <div class="cards-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon primary">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">کارهای امروز</div>
+                            <div class="card-value" id="today-tasks">0</div>
+                            <div class="card-description" id="today-tasks-desc">کار</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon warning">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">کارهای در انتظار</div>
+                            <div class="card-value" id="pending-tasks">0</div>
+                            <div class="card-description" id="pending-tasks-desc">در حال بررسی</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon danger">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">درخواست‌های در انتظار</div>
+                            <div class="card-value" id="pending-requests">0</div>
+                            <div class="card-description" id="pending-requests-desc">درخواست</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon success">
+                                    <i class="fas fa-user-clock"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">وضعیت امروز</div>
+                            <div class="card-value" id="today-status">غایب</div>
+                            <div class="card-description" id="today-status-desc">حضور و غیاب</div>
+                        </div>
+                    </div>
+
+                    <!-- عملیات سریع -->
+                    <div class="cards-grid">
+                        <div class="card">
+                            <h3>عملیات سریع حضور و غیاب</h3>
+                            <div class="btn-group" style="margin-top: 20px;">
+                                <button class="btn btn-success btn-lg" id="check-in-btn">
+                                    <i class="fas fa-sign-in-alt"></i>
+                                    ثبت ورود
+                                </button>
+                                <button class="btn btn-danger btn-lg" id="check-out-btn">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    ثبت خروج
+                                </button>
+                            </div>
+                            <div id="attendance-alert" class="attendance-alert hidden">
+                                <h3 id="attendance-alert-title"></h3>
+                                <p id="attendance-alert-message"></p>
+                                <button class="btn btn-primary" id="attendance-alert-close">
+                                    متوجه شدم
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <h3>درخواست‌ها و کارها</h3>
+                            <div class="btn-group" style="margin-top: 20px;">
+                                <button class="btn btn-primary" id="add-task-btn">
+                                    <i class="fas fa-plus"></i>
+                                    ثبت کار جدید
+                                </button>
+                                <button class="btn btn-warning" id="add-daily-leave-btn">
+                                    <i class="fas fa-calendar-day"></i>
+                                    مرخصی روزانه
+                                </button>
+                                <button class="btn btn-info" id="add-hourly-leave-btn">
+                                    <i class="fas fa-clock"></i>
+                                    مرخصی ساعتی
+                                </button>
+                                <button class="btn btn-primary" id="add-mission-btn">
+                                    <i class="fas fa-map-marked-alt"></i>
+                                    مأموریت
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- فعالیت‌های اخیر -->
+                    <div class="card">
+                        <h3>فعالیت‌های اخیر</h3>
+                        <div class="table-container" style="margin-top: 15px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>زمان</th>
+                                        <th>نوع فعالیت</th>
+                                        <th>شرح</th>
+                                        <th>وضعیت</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-activities-body">
+                                    <tr>
+                                        <td colspan="4" class="text-center">
+                                            <div class="empty-state">
+                                                <i class="fas fa-history"></i>
+                                                <p>هیچ فعالیتی ثبت نشده است</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- حضور و غیاب -->
+                <div id="employee-attendance" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-success" id="attendance-check-in-btn">
+                            <i class="fas fa-sign-in-alt"></i>
+                            ثبت ورود
+                        </button>
+                        <button class="btn btn-danger" id="attendance-check-out-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            ثبت خروج
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="attendance-table">
+                                <thead>
+                                    <tr>
+                                        <th>ردیف</th>
+                                        <th>تاریخ</th>
+                                        <th>روز هفته</th>
+                                        <th>نوع</th>
+                                        <th>ساعت</th>
+                                        <th>موقعیت</th>
+                                        <th>روش تایید</th>
+                                        <th>وضعیت</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendance-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- کارهای من -->
+                <div id="employee-tasks" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-primary" id="employee-tab-add-task-btn">
+                            <i class="fas fa-plus"></i>
+                            ثبت کار جدید
+                        </button>
+                        <button class="btn btn-secondary" id="refresh-tasks-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="tasks-table">
+                                <thead>
+                                    <tr>
+                                        <th>ردیف</th>
+                                        <th>عنوان کار</th>
+                                        <th>تاریخ</th>
+                                        <th>محل</th>
+                                        <th>نوع</th>
+                                        <th>وضعیت تایید</th>
+                                        <th>وضعیت کار</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tasks-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- درخواست‌های من -->
+                <div id="employee-requests" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-primary" id="employee-requests-add-daily">
+                            <i class="fas fa-calendar-day"></i>
+                            مرخصی روزانه
+                        </button>
+                        <button class="btn btn-primary" id="employee-requests-add-hourly">
+                            <i class="fas fa-clock"></i>
+                            مرخصی ساعتی
+                        </button>
+                        <button class="btn btn-primary" id="employee-requests-add-mission">
+                            <i class="fas fa-map-marked-alt"></i>
+                            مأموریت
+                        </button>
+                        <button class="btn btn-secondary" id="refresh-requests-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی
+                        </button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>ردیف</th>
+                                        <th>نوع درخواست</th>
+                                        <th>تاریخ/بازه زمانی</th>
+                                        <th>جزئیات</th>
+                                        <th>وضعیت</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="requests-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- کشیک‌های من -->
+                <div id="employee-duty" class="tab-content">
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="duty-table">
+                                <thead>
+                                    <tr>
+                                        <th>تاریخ</th>
+                                        <th>روز هفته</th>
+                                        <th>نوع کشیک</th>
+                                        <th>ساعت</th>
+                                        <th>شرح</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="duty-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- داشبورد مدیر -->
+                <div id="admin-dashboard" class="tab-content">
+                    <div class="cards-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon primary">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">کل کارمندان</div>
+                            <div class="card-value" id="total-employees">0</div>
+                            <div class="card-description">کارمند فعال</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon success">
+                                    <i class="fas fa-user-check"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">حضور امروز</div>
+                            <div class="card-value" id="today-attendance">0</div>
+                            <div class="card-description">نفر حاضر</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon warning">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">کارهای در انتظار</div>
+                            <div class="card-value" id="admin-pending-tasks">0</div>
+                            <div class="card-description">برای تایید</div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon danger">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                            </div>
+                            <div class="card-title">درخواست‌های در انتظار</div>
+                            <div class="card-value" id="admin-pending-requests">0</div>
+                            <div class="card-description">برای بررسی</div>
+                        </div>
+                    </div>
+
+                    <div class="cards-grid">
+                        <!-- کارهای در انتظار تایید -->
+                        <div class="card">
+                            <h3>کارهای در انتظار تایید</h3>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <div class="table-responsive">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>کارمند</th>
+                                                <th>عنوان کار</th>
+                                                <th>تاریخ</th>
+                                                <th>نوع</th>
+                                                <th>عملیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="admin-pending-tasks-body">
+                                            <tr>
+                                                <td colspan="5" class="text-center">
+                                                    <div class="empty-state">
+                                                        <i class="fas fa-tasks"></i>
+                                                        <p>هیچ کاری در انتظار تایید نیست</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- درخواست‌های در انتظار تایید -->
+                        <div class="card">
+                            <h3>درخواست‌های در انتظار تایید</h3>
+                            <div class="table-container" style="margin-top: 15px;">
+                                <div class="table-responsive">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>کارمند</th>
+                                                <th>نوع درخواست</th>
+                                                <th>تاریخ/زمان</th>
+                                                <th>شرح</th>
+                                                <th>عملیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="admin-pending-requests-body">
+                                            <tr>
+                                                <td colspan="5" class="text-center">
+                                                    <div class="empty-state">
+                                                        <i class="fas fa-envelope"></i>
+                                                        <p>هیچ درخواستی در انتظار تایید نیست</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- مدیریت کارکنان -->
+                <div id="admin-employees" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-primary" id="admin-add-employee-btn">
+                            <i class="fas fa-plus"></i>
+                            افزودن کارمند جدید
+                        </button>
+                        <button class="btn btn-secondary" id="refresh-employees-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی لیست
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="admin-employees-table">
+                                <thead>
+                                    <tr>
+                                        <th>کد پرسنلی</th>
+                                        <th>نام و نام خانوادگی</th>
+                                        <th>شماره تماس</th>
+                                        <th>تاریخ عضویت</th>
+                                        <th>وضعیت</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-employees-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- مدیریت کارها -->
+                <div id="admin-tasks" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-secondary" id="refresh-admin-tasks-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی لیست
+                        </button>
+                        <div class="flex items-center gap-4">
+                            <select id="task-filter-status" class="form-control" style="width: auto;">
+                                <option value="all">همه وضعیت‌ها</option>
+                                <option value="pending">در انتظار تایید</option>
+                                <option value="approved">تایید شده</option>
+                                <option value="rejected">رد شده</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="admin-tasks-table">
+                                <thead>
+                                    <tr>
+                                        <th>کارمند</th>
+                                        <th>عنوان کار</th>
+                                        <th>تاریخ</th>
+                                        <th>محل</th>
+                                        <th>وضعیت تایید</th>
+                                        <th>وضعیت کار</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-tasks-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- مدیریت درخواست‌ها -->
+                <div id="admin-requests" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-secondary" id="refresh-admin-requests-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی لیست
+                        </button>
+                        <div class="flex items-center gap-4">
+                            <select id="request-filter-status" class="form-control" style="width: auto;">
+                                <option value="all">همه وضعیت‌ها</option>
+                                <option value="pending">در انتظار تایید</option>
+                                <option value="approved">تایید شده</option>
+                                <option value="rejected">رد شده</option>
+                            </select>
+                            <select id="request-filter-type" class="form-control" style="width: auto;">
+                                <option value="all">همه انواع</option>
+                                <option value="daily_leave">مرخصی روزانه</option>
+                                <option value="hourly_leave">مرخصی ساعتی</option>
+                                <option value="mission">مأموریت</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="admin-requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>کارمند</th>
+                                        <th>نوع درخواست</th>
+                                        <th>تاریخ/زمان</th>
+                                        <th>شرح</th>
+                                        <th>وضعیت</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-requests-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- مدیریت کشیک -->
+                <div id="admin-duty" class="tab-content">
+                    <div class="btn-group" style="margin-bottom: 20px;">
+                        <button class="btn btn-primary" id="admin-generate-duty-btn">
+                            <i class="fas fa-calendar-plus"></i>
+                            ایجاد جدول کشیک ماهانه
+                        </button>
+                        <button class="btn btn-success" id="admin-finalize-duty-btn" style="display: none;">
+                            <i class="fas fa-check"></i>
+                            ثبت نهایی کشیک
+                        </button>
+                        <button class="btn btn-info" id="admin-print-duty-btn">
+                            <i class="fas fa-print"></i>
+                            پرینت کشیک
+                        </button>
+                        <button class="btn btn-secondary" id="refresh-duty-btn">
+                            <i class="fas fa-sync-alt"></i>
+                            به‌روزرسانی
+                        </button>
+                    </div>
+
+                    <div id="duty-controls" style="display: none;">
+                        <!-- با JS پر می‌شود -->
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-responsive">
+                            <table id="admin-duty-table">
+                                <thead>
+                                    <tr>
+                                        <th>تاریخ</th>
+                                        <th>روز هفته</th>
+                                        <th>کشیک روز</th>
+                                        <th>کشیک شب</th>
+                                        <th>کمک کشیک</th>
+                                        <th>آنکال</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-duty-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- گزارش‌گیری -->
+                <div id="admin-reports" class="tab-content">
+                    <div class="card">
+                        <h3>گزارش‌گیری پیشرفته</h3>
+                        <div class="form-row" style="margin-top: 20px;">
+                            <div class="form-group">
+                                <label>نوع گزارش</label>
+                                <select id="admin-report-type" class="form-control">
+                                    <option value="attendance">حضور و غیاب</option>
+                                    <option value="tasks">کارها</option>
+                                    <option value="requests">درخواست‌ها</option>
+                                    <option value="overtime">اضافه کار</option>
+                                    <option value="duty">کشیک</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>ماه</label>
+                                <select id="admin-report-month" class="form-control">
+                                    <!-- با JS پر می‌شود -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>کارمند</label>
+                                <select id="admin-report-employee" class="form-control">
+                                    <option value="all">همه کارمندان</option>
+                                    <!-- با JS پر می‌شود -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>فرمت خروجی</label>
+                                <select id="admin-report-format" class="form-control" multiple>
+                                    <option value="html" selected>HTML</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="excel">Excel</option>
+                                    <option value="csv">CSV</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-primary" id="admin-generate-report-btn">
+                                <i class="fas fa-chart-bar"></i>
+                                تولید گزارش
+                            </button>
+                            <button class="btn btn-info" id="admin-print-report-btn" style="display: none;">
+                                <i class="fas fa-print"></i>
+                                پرینت گزارش
+                            </button>
+                            <button class="btn btn-success" id="admin-download-report-btn" style="display: none;">
+                                <i class="fas fa-download"></i>
+                                دانلود گزارش
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-container" style="margin-top: 20px;">
+                        <div class="table-responsive">
+                            <table id="admin-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>تاریخ</th>
+                                        <th>شرح</th>
+                                        <th>مقدار</th>
+                                        <th>وضعیت</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-report-table-body">
+                                    <!-- با JS پر می‌شود -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- تنظیمات سیستم -->
+                <div id="admin-settings" class="tab-content">
+                    <div class="card">
+                        <h3>تنظیمات سیستم</h3>
+                        <form id="admin-settings-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>ساعت شروع کار</label>
+                                    <input type="time" id="work-start-time" class="form-control" value="08:00">
+                                </div>
+                                <div class="form-group">
+                                    <label>ساعت پایان کار</label>
+                                    <input type="time" id="work-end-time" class="form-control" value="17:00">
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>تاریخ شروع دوره</label>
+                                    <input type="text" id="work-start-date" class="form-control datepicker-input">
+                                </div>
+                                <div class="form-group">
+                                    <label>تاریخ پایان دوره</label>
+                                    <input type="text" id="work-end-date" class="form-control datepicker-input">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>عرض جغرافیایی دفتر</label>
+                                    <input type="number" id="office-lat" class="form-control" step="0.000001" value="35.6892">
+                                </div>
+                                <div class="form-group">
+                                    <label>طول جغرافیایی دفتر</label>
+                                    <input type="number" id="office-lng" class="form-control" step="0.000001" value="51.3890">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="button" class="btn btn-info" id="select-location-btn">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    انتخاب موقعیت روی نقشه
+                                </button>
+                            </div>
+
+                            <div id="admin-map" style="height: 400px; display: none;"></div>
+
+                            <div class="form-row" style="margin-top: 20px;">
+                                <div class="form-group">
+                                    <label>حداکثر فاصله مجاز (متر)</label>
+                                    <input type="number" id="max-distance" class="form-control" value="500" min="50" max="1000">
+                                </div>
+                                <div class="form-group">
+                                    <label>زمان انتظار GPS (ثانیه)</label>
+                                    <input type="number" id="gps-timeout" class="form-control" value="10" min="5" max="30">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="require-photo" class="form-control" style="width: auto;">
+                                    الزام آپلود عکس برای کارها
+                                </label>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-success" id="admin-save-settings-btn">
+                                    <i class="fas fa-save"></i>
+                                    ذخیره تنظیمات
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال ثبت کار -->
+    <div id="task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>ثبت کار جدید</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="task-form">
+                    <div class="form-group">
+                        <label>عنوان کار *</label>
+                        <input type="text" id="task-title" class="form-control" placeholder="عنوان کار را وارد کنید" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>محل کار *</label>
+                        <input type="text" id="task-location" class="form-control" placeholder="محل انجام کار را وارد کنید" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>تاریخ کار *</label>
+                            <input type="text" id="task-date" class="form-control datepicker-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>نوع کار *</label>
+                            <select id="task-type" class="form-control" required>
+                                <option value="individual">فردی</option>
+                                <option value="team">گروهی</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="team-members-group" style="display: none;">
+                        <label>انتخاب همکاران (برای کار گروهی)</label>
+                        <select id="team-members" class="form-control" multiple style="height: 100px;">
+                            <!-- با JS پر می‌شود -->
+                        </select>
+                        <small class="text-muted">برای انتخاب چند نفر کلید Ctrl را نگه دارید</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>توضیحات کار *</label>
+                        <textarea id="task-description" class="form-control" rows="3" placeholder="شرح کار را بنویسید" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>وضعیت کار *</label>
+                        <select id="task-status" class="form-control" required>
+                            <option value="completed">کار تمام شده</option>
+                            <option value="incomplete">کار نیمه تمام</option>
+                            <option value="repeated">کار تکرار شده</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>عکس‌های قبل از کار</label>
+                        <div class="image-upload-container" id="before-photos-container">
+                            <input type="file" id="before-photos" accept="image/*" multiple style="display: none;">
+                            <button type="button" class="btn btn-glass" id="before-photos-btn">
+                                <i class="fas fa-camera"></i>
+                                انتخاب عکس
+                            </button>
+                            <p class="text-muted">می‌توانید عکس‌ها را اینجا رها کنید</p>
+                        </div>
+                        <div class="image-preview" id="before-photos-preview"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>عکس‌های بعد از کار</label>
+                        <div class="image-upload-container" id="after-photos-container">
+                            <input type="file" id="after-photos" accept="image/*" multiple style="display: none;">
+                            <button type="button" class="btn btn-glass" id="after-photos-btn">
+                                <i class="fas fa-camera"></i>
+                                انتخاب عکس
+                            </button>
+                            <p class="text-muted">می‌توانید عکس‌ها را اینجا رها کنید</p>
+                        </div>
+                        <div class="image-preview" id="after-photos-preview"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="submit-task-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    ارسال برای تایید
+                </button>
+                <button class="btn btn-outline-primary close-modal">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال مرخصی روزانه -->
+    <div id="daily-leave-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>درخواست مرخصی روزانه</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="daily-leave-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>تاریخ شروع *</label>
+                            <input type="text" id="daily-start-date" class="form-control datepicker-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>تعداد روزهای مرخصی *</label>
+                            <select id="daily-days-count" class="form-control" required>
+                                <option value="1">1 روز</option>
+                                <option value="2">2 روز</option>
+                                <option value="3">3 روز</option>
+                                <option value="4">4 روز</option>
+                                <option value="5">5 روز</option>
+                                <option value="6">6 روز</option>
+                                <option value="7">7 روز</option>
+                                <option value="8">8 روز</option>
+                                <option value="9">9 روز</option>
+                                <option value="10">10 روز</option>
+                                <option value="11">11 روز</option>
+                                <option value="12">12 روز</option>
+                                <option value="13">13 روز</option>
+                                <option value="14">14 روز</option>
+                                <option value="15">15 روز</option>
+                                <option value="16">16 روز</option>
+                                <option value="17">17 روز</option>
+                                <option value="18">18 روز</option>
+                                <option value="19">19 روز</option>
+                                <option value="20">20 روز</option>
+                                <option value="21">21 روز</option>
+                                <option value="22">22 روز</option>
+                                <option value="23">23 روز</option>
+                                <option value="24">24 روز</option>
+                                <option value="25">25 روز</option>
+                                <option value="26">26 روز</option>
+                                <option value="27">27 روز</option>
+                                <option value="28">28 روز</option>
+                                <option value="29">29 روز</option>
+                                <option value="30">30 روز</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" id="daily-end-date-container" style="display: none;">
+                        <div class="bg-success text-white p-3 rounded">
+                            <strong>تاریخ پایان: <span id="calculated-end-date">--</span></strong>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>علت مرخصی *</label>
+                        <textarea id="daily-reason" class="form-control" rows="3" placeholder="علت مرخصی را وارد کنید" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="submit-daily-leave-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    ارسال برای تایید
+                </button>
+                <button class="btn btn-outline-primary close-modal">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال مرخصی ساعتی -->
+    <div id="hourly-leave-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>درخواست مرخصی ساعتی</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="hourly-leave-form">
+                    <div class="form-group">
+                        <label>تاریخ *</label>
+                        <input type="text" id="hourly-date" class="form-control datepicker-input" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>ساعت شروع *</label>
+                            <input type="time" id="hourly-start-time" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>ساعت پایان *</label>
+                            <input type="time" id="hourly-end-time" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>علت مرخصی *</label>
+                        <textarea id="hourly-reason" class="form-control" rows="3" placeholder="علت مرخصی را وارد کنید" required></textarea>
+                    </div>
+                    <div id="hourly-duration" style="display: none;">
+                        <div class="bg-info text-white p-3 rounded">
+                            <strong>مدت زمان مرخصی: <span id="duration-text">0 ساعت</span></strong>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="submit-hourly-leave-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    ارسال برای تایید
+                </button>
+                <button class="btn btn-outline-primary close-modal">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال مأموریت -->
+    <div id="mission-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>درخواست مأموریت</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="mission-form">
+                    <div class="form-group">
+                        <label>تاریخ *</label>
+                        <input type="text" id="mission-date" class="form-control datepicker-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>علت مأموریت *</label>
+                        <textarea id="mission-reason" class="form-control" rows="3" placeholder="علت مأموریت را وارد کنید" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>توضیحات (اختیاری)</label>
+                        <textarea id="mission-description" class="form-control" rows="3" placeholder="توضیحات بیشتر"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="submit-mission-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    ارسال برای تایید
+                </button>
+                <button class="btn btn-outline-primary close-modal">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال افزودن کارمند -->
+    <div id="admin-employee-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>افزودن کارمند جدید</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="admin-employee-form">
+                    <div class="form-group">
+                        <label>کد پرسنلی *</label>
+                        <input type="text" id="admin-emp-code" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>نام و نام خانوادگی *</label>
+                        <input type="text" id="admin-emp-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>شماره تماس *</label>
+                        <input type="tel" id="admin-emp-phone" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رمز عبور *</label>
+                        <input type="password" id="admin-emp-password" class="form-control" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="admin-save-employee-btn">
+                    <i class="fas fa-check"></i>
+                    ذخیره کارمند
+                </button>
+                <button class="btn btn-outline-primary close-modal">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال مشاهده کار -->
+    <div id="view-task-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>مشاهده کار</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="view-task-content">
+                    <!-- با JS پر می‌شود -->
+                </div>
+            </div>
+            <div class="modal-footer" id="view-task-footer">
+                <!-- با JS پر می‌شود -->
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال مشاهده درخواست -->
+    <div id="view-request-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>مشاهده درخواست</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="view-request-content">
+                    <!-- با JS پر می‌شود -->
+                </div>
+            </div>
+            <div class="modal-footer" id="view-request-footer">
+                <!-- با JS پر می‌شود -->
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال نمایش تصویر -->
+    <div id="image-viewer-modal" class="modal">
+        <div class="modal-content" style="max-width: 90%; max-height: 90%; background: black;">
+            <div class="modal-header" style="border: none; position: absolute; top: 10px; left: 10px; z-index: 1;">
+                <button class="close-modal" style="color: white; background: rgba(0,0,0,0.5);">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%;">
+                <img id="full-size-image" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال تایید دستی -->
+    <div id="manual-verification-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>تایید دستی حضور و غیاب</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>آیا مطمئن هستید که می‌خواهید <span id="manual-verification-type">ورود</span> را ثبت کنید؟</p>
+                <p class="text-muted">این عملیات به صورت دستی و با مسئولیت شما ثبت خواهد شد.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="manual-verification-confirm">
+                    <i class="fas fa-check"></i>
+                    بله، ثبت کن
+                </button>
+                <button class="btn btn-outline-primary" id="manual-verification-cancel">
+                    انصراف
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال انقضای نشست -->
+    <div id="session-timeout-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>انقضای نشست</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>نشست شما منقضی شده است. برای ادامه کار لطفاً مجدد وارد شوید.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="session-timeout-confirm">
+                    <i class="fas fa-sign-in-alt"></i>
+                    ورود مجدد
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال راهنما -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>راهنما</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="help-content">
+                    <!-- با JS پر می‌شود -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-primary close-modal">بستن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال خطا -->
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>خطا در سیستم</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="error-content">
+                    <!-- با JS پر می‌شود -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="error-retry-btn">
+                    <i class="fas fa-redo"></i>
+                    تلاش مجدد
+                </button>
+                <button class="btn btn-outline-primary" id="error-report-btn">
+                    <i class="fas fa-bug"></i>
+                    گزارش خطا
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- کانتینر اعلان‌ها -->
+    <div id="notification-container"></div>
+
+    <!-- دکمه نصب PWA -->
+    <button id="install-button" class="btn btn-primary" style="position: fixed; bottom: 20px; left: 20px; display: none;">
+        <i class="fas fa-download"></i> نصب برنامه
+    </button>
+
+    <!-- اسکریپت‌ها -->
+    <!-- Persian Date -->
+    <script src="https://cdn.jsdelivr.net/npm/persian-date@1.1.0/dist/persian-date.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
+    
+    <!-- Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Main Application -->
+    <script type="module" src="main.js"></script>
+    
+    <!-- Initialize Datepickers -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Persian datepickers
+            const datepickerInputs = document.querySelectorAll('.datepicker-input');
+            datepickerInputs.forEach(input => {
+                $(input).persianDatepicker({
+                    format: 'YYYY/MM/DD',
+                    observer: true,
+                    initialValue: false,
+                    autoClose: true
+                });
+            });
+        });
+    </script>
+</body>
+</html>
