@@ -1289,6 +1289,15 @@
                     initialValue: false,
                     autoClose: true
                     <script type="module" src="./main.js"></script>
+                    <script>
+setTimeout(() => {
+  const loading = document.getElementById('app-loading');
+  if (loading && !loading.classList.contains('hidden')) {
+    loading.classList.add('hidden');
+    document.getElementById('auth-page')?.classList.remove('hidden');
+  }
+}, 5000);
+</script>
                 });
             });
         });
