@@ -5,7 +5,7 @@
 // ✅ Enterprise-Grade Architecture
 // ✅ Production Ready
 // ==============================================
-
+console.log('MAIN JS LOADED');
 'use strict';
 
 // ==================== MODULE IMPORTS ====================
